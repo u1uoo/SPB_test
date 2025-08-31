@@ -27,6 +27,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
     highs = df["high"].tolist()
     lows = df["low"].tolist()
     closes = df["close"].tolist()
+    volumes = df["volume"].tolist()
 
     sma_series = {p: sma(closes, p) for p in sma_periods}
     ema_series = {p: ema(closes, p) for p in ema_periods}
@@ -54,6 +55,46 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
     else:
         dx = 1.0
     width = dx * 0.6
+
+
+    vol_colors = [
+        ("green" if (c is not None and o is not None and not pd.isna(c) and not pd.isna(o) and c >= o) else "red")
+        for o, c in zip(opens, closes)
+    ]
+
+    vol_bars = ax1.bar(
+        x,
+        [0 for _ in volumes],
+        width=width * 0.8,
+        bottom=0,
+        color=vol_colors,
+        alpha=0.3,
+        label="Volume",
+        zorder=0,
+        transform=ax1.get_xaxis_transform(),
+        align="center",
+    )
+
+    target_vol_frac = 0.15
+
+    def _visible_max_volume():
+        xlim = ax1.get_xlim()
+        vis_max = 0.0
+        for xi, v in zip(x, volumes):
+            if v is None or pd.isna(v):
+                continue
+            if xlim[0] <= xi <= xlim[1]:
+                if v > vis_max:
+                    vis_max = v
+        return vis_max if vis_max > 0 else 1.0
+
+    def _rescale_volume_bars():
+        vis_max = _visible_max_volume()
+        scale = target_vol_frac / vis_max
+        for patch, v in zip(vol_bars.patches, volumes):
+            h = (0 if v is None or pd.isna(v) else v * scale)
+            patch.set_height(h)
+        fig.canvas.draw_idle()
 
     for xi, o, h, l, c in zip(x, opens, highs, lows, closes):
         if pd.isna(o) or pd.isna(h) or pd.isna(l) or pd.isna(c):
@@ -113,6 +154,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
             if np.isnan(val):
                 return ""
             i = int(np.clip(round(val), 0, len(df) - 1))
+            
             return mdates.num2date(mdates.date2num(idx_dt[i])).strftime("%Y-%m-%d")
 
         for ax in [ax1, ax2, ax3]:
@@ -146,6 +188,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
             ylim = ax.get_ylim()
             new_ylim = zoom_1d(event.ydata, ylim, scale)
             ax.set_ylim(new_ylim)
+        _rescale_volume_bars()
         fig.canvas.draw_idle()
 
     def on_press(event):
@@ -169,6 +212,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
             dy = event.ydata - y0
             ylim0 = state["ylim"]
             state["ax"].set_ylim(ylim0[0] - dy, ylim0[1] - dy)
+        _rescale_volume_bars()
         fig.canvas.draw_idle()
 
     def on_release(event):
@@ -176,6 +220,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
         state["xlim"] = None
         state["ylim"] = None
         state["ax"] = None
+        _rescale_volume_bars()
 
     fig.canvas.mpl_connect("scroll_event", on_scroll)
     fig.canvas.mpl_connect("button_press_event", on_press)
@@ -190,8 +235,8 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
     for p, line in ema_lines.items():
         labels.append(f"EMA {p}")
         artists.append(line)
-    labels += ["MACD", "Signal", "Hist", "RSI"]
-    artists += [macd_line_artist, signal_line_artist, hist_bars, rsi_line_artist]
+    labels += ["Volume", "MACD", "Signal", "Hist", "RSI"]
+    artists += [vol_bars, macd_line_artist, signal_line_artist, hist_bars, rsi_line_artist]
 
     check_ax = fig.add_axes([0.84, 0.15, 0.14, 0.3])
     checks = CheckButtons(check_ax, labels, [True] * len(labels))
@@ -212,6 +257,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
     checks.on_clicked(on_check)
 
     plt.tight_layout()
+    _rescale_volume_bars()
     plt.show()
 
 
