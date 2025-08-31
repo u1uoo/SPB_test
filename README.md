@@ -1,6 +1,6 @@
 ## Требования
-- Python 3.8+
-- Установка
+- Python 3.8
+### Установка
 ```bash
 python -m pip install pandas matplotlib requests
 ```
