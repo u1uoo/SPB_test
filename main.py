@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from get_crypto import get_crypto_data
 from get_stocks import get_stocks_data
 from plot_data import load_csv as load_csv_plot, plot_indicators
+from plotly_plot import plot_indicators_plotly
 
 
 def eprint(msg):
@@ -156,13 +157,23 @@ def cmd_plot(args):
 
     sma_periods = _norm_periods(args.sma, default=(12, 26))
     ema_periods = _norm_periods(args.ema, default=(12, 26))
-    plot_indicators(
-        df,
-        symbol,
-        sma_periods=sma_periods,
-        ema_periods=ema_periods,
-        is_crypto=getattr(args, "is_crypto", False),
-    )
+    backend = getattr(args, "backend", "mpl")
+    if backend == "plotly":
+        plot_indicators_plotly(
+            df,
+            symbol,
+            sma_periods=sma_periods,
+            ema_periods=ema_periods,
+            is_crypto=getattr(args, "is_crypto", False),
+        )
+    else:
+        plot_indicators(
+            df,
+            symbol,
+            sma_periods=sma_periods,
+            ema_periods=ema_periods,
+            is_crypto=getattr(args, "is_crypto", False),
+        )
     return 0
 
 
@@ -176,6 +187,7 @@ def cmd_fetch_plot_crypto(args):
         ema=args.ema,
         outdir=args.outdir,
         is_crypto=True,
+        backend=getattr(args, "backend", "mpl"),
     )
     return cmd_plot(p)
 
@@ -190,6 +202,7 @@ def cmd_fetch_plot_stock(args):
         ema=args.ema,
         outdir=args.outdir,
         is_crypto=False,
+        backend=getattr(args, "backend", "mpl"),
     )
     return cmd_plot(p)
 
@@ -241,6 +254,7 @@ def build_parser():
     p_plot.add_argument("--path", type=str, default=None, help="CSV path (default ohlc_{symbol}.csv)")
     p_plot.add_argument("--sma", type=str, default=None, help="SMA periods (e.g. 12,26)")
     p_plot.add_argument("--ema", type=str, default=None, help="EMA periods (e.g. 12,26)")
+    p_plot.add_argument("--backend", type=str, choices=["mpl", "plotly"], default="mpl", help="Plotting backend")
     add_common_out_args(p_plot)
     p_plot.set_defaults(func=cmd_plot)
 
@@ -250,6 +264,7 @@ def build_parser():
     p_fp.add_argument("--interval", type=str, default="1d", help="interval, e.g. 1d, 1h")
     p_fp.add_argument("--sma", type=str, default=(12, 26), help="SMA periods (e.g. 12,26)")
     p_fp.add_argument("--ema", type=str, default=(12, 26), help="EMA periods (e.g. 12,26)")
+    p_fp.add_argument("--backend", type=str, choices=["mpl", "plotly"], default="mpl", help="Plotting backend")
     add_common_out_args(p_fp)
     p_fp.set_defaults(func=cmd_fetch_plot_crypto)
 
@@ -262,6 +277,7 @@ def build_parser():
     p_fp_stock.add_argument("--end", type=str, default=None, help="end date YYYY-MM-DD")
     p_fp_stock.add_argument("--sma", type=str, default=(12, 26), help="SMA periods (e.g. 12,26)")
     p_fp_stock.add_argument("--ema", type=str, default=(12, 26), help="EMA periods (e.g. 12,26)")
+    p_fp_stock.add_argument("--backend", type=str, choices=["mpl", "plotly"], default="mpl", help="Plotting backend")
     add_common_out_args(p_fp_stock)
     p_fp_stock.set_defaults(func=cmd_fetch_plot_stock)
 

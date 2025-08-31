@@ -3,7 +3,7 @@
 
 ### Установка
 ```bash
-python -m pip install requests numpy pandas matplotlib yfinance 
+python -m pip install requests numpy pandas matplotlib yfinance plotly
 ```
 
 ## Структура
@@ -47,12 +47,17 @@ python main.py fetch-plot-stock --symbol AAPL --interval 1d --period 1y --sma 12
 
 ### Построение графиков из CSV
 ```bash
-python main.py plot --path ./ohlc_BTCUSDT.csv --sma 12,26 --ema 21,55
+# Matplotlib backend
+python main.py plot --path ./ohlc_BTCUSDT.csv --sma 12,26 --ema 21,55 --backend mpl
+
+# Plotly backend (WebGL)
+python main.py plot --path ./ohlc_BTCUSDT.csv --sma 12,26 --ema 21,55 --backend plotly
 ```
 
 Примечания:
 - `--sma` и `--ema` — список периодов через запятую, например `12,26`.
 - Все данные сохраняются как `ohlc_{SYMBOL}.csv` в указанной директории`--outdir`.
+- `--backend` — `mpl` (Matplotlib, по умолчанию) или `plotly` (WebGL, быстрее для больших данных).
 
 ### Взаимодействие с графиками
 - Колёсико мыши: зум по X (на всех панелях)

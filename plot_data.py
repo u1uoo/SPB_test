@@ -5,9 +5,10 @@ from matplotlib.ticker import FuncFormatter, MaxNLocator
 import numpy as np
 from matplotlib.widgets import CheckButtons
 from matplotlib.transforms import blended_transform_factory
+from matplotlib.lines import Line2D
 from types import SimpleNamespace
 
-from metrics import sma, ema, macd, rsi
+from metrics import sma, ema, macd, rsi, volume_profile, value_area_bounds
 
 
 def load_csv(path):
@@ -24,7 +25,7 @@ def load_csv(path):
     return df
 
 
-def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_crypto=False):
+def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_crypto=False):
     opens = df["open"].tolist()
     highs = df["high"].tolist()
     lows = df["low"].tolist()
@@ -99,7 +100,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
         fig.canvas.draw_idle()
 
 
-    vp_container = SimpleNamespace(patches=[])
+    vp_container = SimpleNamespace(patches=[], va_lines=[])
     vp_target_frac = 0.15
     vp_bins = 40
     vp_color = "tab:blue"
@@ -113,6 +114,13 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
             except Exception:
                 pass
         vp_container.patches.clear()
+
+        for ln in getattr(vp_container, "va_lines", []):
+            try:
+                ln.remove()
+            except Exception:
+                pass
+        vp_container.va_lines = []
 
         xlim = ax1.get_xlim()
 
@@ -133,12 +141,12 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
             fig.canvas.draw_idle()
             return
 
-        edges = np.linspace(pmin, pmax, vp_bins + 1)
-        hist, edges = np.histogram(vis_prices, bins=edges, weights=vis_vols)
-        max_bin = float(np.max(hist)) if np.any(hist) else 0.0
+        hist, edges, max_bin = volume_profile(vis_prices, vis_vols, bins=vp_bins)
         if max_bin <= 0:
             fig.canvas.draw_idle()
             return
+
+        va_bounds = value_area_bounds(hist, edges, coverage=0.7)
 
         for v, y0, y1 in zip(hist, edges[:-1], edges[1:]):
             if v <= 0:
@@ -156,6 +164,13 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
             )
             ax1.add_patch(rect)
             vp_container.patches.append(rect)
+
+        if va_bounds is not None:
+            val, vah = va_bounds
+            for y in (val, vah):
+                ln = Line2D([1.0 - vp_target_frac, 1.0], [y, y], transform=vp_transform, color=vp_color, linestyle="--", linewidth=1.2, alpha=0.9, zorder=1)
+                ax1.add_line(ln)
+                vp_container.va_lines.append(ln)
         fig.canvas.draw_idle()
 
     for xi, o, h, l, c in zip(x, opens, highs, lows, closes):
