@@ -13,7 +13,6 @@ def get_crypto_data(symbol, interval="1d", limit=1500, start_time=None, end_time
         params["endTime"] = end_time
 
     r = requests.get(BASE_URL, params=params, timeout=10)
-
     r.raise_for_status()
     data = r.json()
 
@@ -37,7 +36,11 @@ def get_crypto_data(symbol, interval="1d", limit=1500, start_time=None, end_time
 
     df = df[["open_time", "open", "high", "low", "close", "volume"]]
     df["symbol"] = symbol
+
+    df["open_time"] = pd.to_datetime(df["open_time"], unit="ms").dt.strftime("%Y-%m-%d")
+
     return df
+
 
 
 def main():

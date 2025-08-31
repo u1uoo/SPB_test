@@ -1,100 +1,269 @@
 import argparse
 import os
+import sys
+from types import SimpleNamespace
 
 from get_crypto import get_crypto_data
 from get_stocks import get_stocks_data
 from plot_data import load_csv as load_csv_plot, plot_indicators
 
 
-def cmd_fetch(args):
-    df = get_crypto_data(args.symbol, interval=args.timeframe)
-    if df.empty:
-        print("cannot fetch data")
-        return 1
-    out = f"ohlc_{args.symbol}.csv"
+def eprint(msg):
+    print(msg, file=sys.stderr)
+
+
+def _parse_periods(opt, default=(12, 26)):
+    if not opt:
+        return default
+    try:
+        periods = tuple(int(x.strip()) for x in opt.split(","))
+        if not periods or any(p <= 0 for p in periods):
+            raise ValueError
+        return periods
+    except Exception:
+        eprint("invalid periods; example: 12,26")
+        sys.exit(2)
+
+
+def _ensure_dir(path):
+    d = os.path.dirname(path)
+    if d and not os.path.exists(d):
+        os.makedirs(d, exist_ok=True)
+
+
+def _save_df(df, out):
+    _ensure_dir(out)
     df.to_csv(out, index=False)
-    print(f"Saved {len(df)} rows to {out}")
+    print(f"saved to {out}")
+
+
+def _fetch_and_save(fetch_fn, symbol, outdir, **kwargs):
+    try:
+        df = fetch_fn(symbol, **kwargs)
+    except Exception as exc:
+        eprint(f"fetch error: {exc}")
+        return 1
+    if df.empty:
+        eprint("cannot fetch data")
+        return 1
+    _save_df(df, os.path.join(outdir, f"ohlc_{symbol}.csv"))
     return 0
+
+
+def _batch_fetch(list_path, fetch_fn, outdir, per_symbol_kwargs):
+    import pandas as pd
+
+    if not os.path.exists(list_path):
+        eprint("file not found")
+        return 1
+
+    instruments = pd.read_csv(list_path, comment="#")
+    if "symbol" not in instruments.columns:
+        eprint("missing 'symbol' column")
+        return 1
+
+    total = 0
+    for symbol in instruments["symbol"]:
+        sym = str(symbol)
+        try:
+            df = fetch_fn(sym, **per_symbol_kwargs)
+        except Exception as exc:
+            eprint(f"{sym}: error: {exc}")
+            continue
+        if df.empty:
+            eprint(f"{sym}: empty data")
+            continue
+        out = os.path.join(outdir, f"ohlc_{sym}.csv")
+        _ensure_dir(out)
+        df.to_csv(out, index=False)
+        print(f"{sym}: saved {len(df)} rows to {out}")
+        total += 1
+
+    print(f"completed: {total} saved")
+    return 0 if total > 0 else 1
+
+
+def cmd_fetch_crypto(args):
+    return _fetch_and_save(
+        get_crypto_data,
+        args.symbol,
+        args.outdir,
+        interval=args.interval,
+    )
+
+
+def cmd_fetch_crypto_batch(args):
+    return _batch_fetch(
+        args.list,
+        get_crypto_data,
+        args.outdir,
+        {"interval": args.interval},
+    )
+
+
+def cmd_fetch_stock(args):
+    return _fetch_and_save(
+        get_stocks_data,
+        args.symbol,
+        args.outdir,
+        interval=args.interval,
+        period=args.period,
+        start=args.start,
+        end=args.end,
+    )
+
+
+def cmd_fetch_stocks_batch(args):
+    return _batch_fetch(
+        args.list,
+        get_stocks_data,
+        args.outdir,
+        {
+            "interval": args.interval,
+            "period": args.period,
+            "start": args.start,
+            "end": args.end,
+        },
+    )
 
 
 def cmd_plot(args):
-    path = args.path or f"ohlc_{args.symbol}.csv"
+    if args.path:
+        path = args.path
+    elif args.symbol:
+        path = os.path.join(args.outdir, f"ohlc_{args.symbol}.csv")
+    else:
+        eprint("either --path or --symbol is required for 'plot'")
+        return 2
+
     if not os.path.exists(path):
-        print(f"file not found")
+        eprint("file not found")
         return 1
+
     df = load_csv_plot(path)
     if df.empty:
-        print("empty file")
+        eprint("empty file")
         return 1
-    symbol = args.symbol or (
-        df["symbol"].iloc[0] if "symbol" in df.columns else "SYMBOL"
+
+    symbol = args.symbol or (df["symbol"].iloc[0] if "symbol" in df.columns else "SYMBOL")
+
+    def _norm_periods(val, default=(12, 26)):
+        if val is None:
+            return default
+        if isinstance(val, (tuple, list)):
+            return tuple(int(x) for x in val)
+        return _parse_periods(val, default=default)
+
+    sma_periods = _norm_periods(args.sma, default=(12, 26))
+    ema_periods = _norm_periods(args.ema, default=(12, 26))
+    plot_indicators(
+        df,
+        symbol,
+        sma_periods=sma_periods,
+        ema_periods=ema_periods,
+        is_crypto=getattr(args, "is_crypto", False),
     )
-    sma_periods = tuple(int(x) for x in args.sma.split(",")) if args.sma else (12, 26)
-    ema_periods = tuple(int(x) for x in args.ema.split(",")) if args.ema else (12, 26)
-    plot_indicators(df, symbol, sma_periods=sma_periods, ema_periods=ema_periods)
     return 0
 
 
-def cmd_fetch_plot(args):
-    fetch_rc = cmd_fetch(args)
-    if fetch_rc != 0:
-        return fetch_rc
-    path = f"ohlc_{args.symbol}.csv"
+def cmd_fetch_plot_crypto(args):
+    if cmd_fetch_crypto(args) != 0:
+        return 1
+    p = SimpleNamespace(
+        path=os.path.join(args.outdir, f"ohlc_{args.symbol}.csv"),
+        symbol=args.symbol,
+        sma=args.sma,
+        ema=args.ema,
+        outdir=args.outdir,
+        is_crypto=True,
+    )
+    return cmd_plot(p)
 
-    class P:
-        pass
 
-    p = P()
-    p.path = path
-    p.symbol = args.symbol
-    p.sma = args.sma
-    p.ema = args.ema
+def cmd_fetch_plot_stock(args):
+    if cmd_fetch_stock(args) != 0:
+        return 1
+    p = SimpleNamespace(
+        path=os.path.join(args.outdir, f"ohlc_{args.symbol}.csv"),
+        symbol=args.symbol,
+        sma=args.sma,
+        ema=args.ema,
+        outdir=args.outdir,
+        is_crypto=False,
+    )
     return cmd_plot(p)
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="")
+    parser = argparse.ArgumentParser(description="Fetch OHLC data and plot indicators.")
     sub = parser.add_subparsers(dest="command")
 
-    p_fetch = sub.add_parser("fetch", help="fetch data from binance")
-    p_fetch.add_argument(
-        "--symbol", type=str, default="BTCUSDT", help="symbol, e.g. BTCUSDT"
-    )
+    def add_common_out_args(p):
+        p.add_argument("--outdir", type=str, default=".", help="directory for outputs")
 
-    p_fetch.add_argument("--timeframe", type=str, default="1d", help="timeframe")
-    p_fetch.set_defaults(func=cmd_fetch)
+
+    p_fetch = sub.add_parser("fetch-crypto", help="fetch crypto OHLC from Binance")
+    p_fetch.add_argument("--symbol", type=str, default="BTCUSDT", help="symbol, e.g. BTCUSDT")
+    p_fetch.add_argument("--interval", type=str, default="1d", help="interval, e.g. 1d, 1h")
+    add_common_out_args(p_fetch)
+    p_fetch.set_defaults(func=cmd_fetch_crypto)
+
+
+    p_fetch_crypto_batch = sub.add_parser("fetch-cryptos", help="batch fetch cryptos from CSV")
+    p_fetch_crypto_batch.add_argument("--list", type=str, default="crypto.csv", help="csv with column 'symbol'")
+    p_fetch_crypto_batch.add_argument("--interval", type=str, default="1d", help="interval, e.g. 1d, 1h")
+    add_common_out_args(p_fetch_crypto_batch)
+    p_fetch_crypto_batch.set_defaults(func=cmd_fetch_crypto_batch)
+
+
+    p_fetch_stock = sub.add_parser("fetch-stock", help="fetch single stock OHLC via yfinance")
+    p_fetch_stock.add_argument("--symbol", type=str, required=True, help="stock ticker, e.g. AAPL")
+    p_fetch_stock.add_argument("--interval", type=str, default="1d", help="interval, e.g. 1d, 1h")
+    p_fetch_stock.add_argument("--period", type=str, default="1y", help="period when start/end not provided")
+    p_fetch_stock.add_argument("--start", type=str, default=None, help="start date YYYY-MM-DD")
+    p_fetch_stock.add_argument("--end", type=str, default=None, help="end date YYYY-MM-DD")
+    add_common_out_args(p_fetch_stock)
+    p_fetch_stock.set_defaults(func=cmd_fetch_stock)
+
+
+    p_fetch_stocks = sub.add_parser("fetch-stocks", help="batch fetch stocks from CSV")
+    p_fetch_stocks.add_argument("--list", type=str, default="stocks.csv", help="csv with column 'symbol'")
+    p_fetch_stocks.add_argument("--interval", type=str, default="1d", help="interval, e.g. 1d, 1h")
+    p_fetch_stocks.add_argument("--period", type=str, default="1y", help="period when start/end not provided")
+    p_fetch_stocks.add_argument("--start", type=str, default=None, help="start date YYYY-MM-DD")
+    p_fetch_stocks.add_argument("--end", type=str, default=None, help="end date YYYY-MM-DD")
+    add_common_out_args(p_fetch_stocks)
+    p_fetch_stocks.set_defaults(func=cmd_fetch_stocks_batch)
+
 
     p_plot = sub.add_parser("plot", help="Plot indicators from CSV")
-    p_plot.add_argument(
-        "--symbol", type=str, default=None, help="Symbol for titles/paths"
-    )
-    p_plot.add_argument(
-        "--path", type=str, default=None, help="CSV path (default ohlc_{symbol}.csv)"
-    )
-    p_plot.add_argument(
-        "--sma",
-        type=str,
-        default=None,
-        help="SMA periods (e.g. 12,26)",
-    )
-    p_plot.add_argument(
-        "--ema", type=str, default=None, help="EMA periods (e.g. 12,26)"
-    )
+    p_plot.add_argument("--symbol", type=str, default=None, help="Symbol for titles/paths")
+    p_plot.add_argument("--path", type=str, default=None, help="CSV path (default ohlc_{symbol}.csv)")
+    p_plot.add_argument("--sma", type=str, default=None, help="SMA periods (e.g. 12,26)")
+    p_plot.add_argument("--ema", type=str, default=None, help="EMA periods (e.g. 12,26)")
+    add_common_out_args(p_plot)
     p_plot.set_defaults(func=cmd_plot)
 
-    p_fp = sub.add_parser("fetch-plot", help="Fetch OHLC then plot")
-    p_fp.add_argument(
-        "--symbol", type=str, default="BTCUSDT", help="symbol, e.g. BTCUSDT"
-    )
-    p_fp.add_argument("--timeframe", type=str, default="1d", help="timeframe")
-    p_fp.add_argument(
-        "--sma",
-        type=str,
-        default=None,
-        help="SMA periods (e.g. 12,26)",
-    )
-    p_fp.add_argument("--ema", type=str, default=None, help="EMA periods (e.g. 12,26)")
-    p_fp.set_defaults(func=cmd_fetch_plot)
+
+    p_fp = sub.add_parser("fetch-plot-crypto", help="Fetch crypto OHLC then plot")
+    p_fp.add_argument("--symbol", type=str, default="BTCUSDT", help="symbol, e.g. BTCUSDT")
+    p_fp.add_argument("--interval", type=str, default="1d", help="interval, e.g. 1d, 1h")
+    p_fp.add_argument("--sma", type=str, default=(12, 26), help="SMA periods (e.g. 12,26)")
+    p_fp.add_argument("--ema", type=str, default=(12, 26), help="EMA periods (e.g. 12,26)")
+    add_common_out_args(p_fp)
+    p_fp.set_defaults(func=cmd_fetch_plot_crypto)
+
+
+    p_fp_stock = sub.add_parser("fetch-plot-stock", help="Fetch stock OHLC then plot")
+    p_fp_stock.add_argument("--symbol", type=str, required=True, help="stock ticker, e.g. AAPL")
+    p_fp_stock.add_argument("--interval", type=str, default="1d", help="interval, e.g. 1d, 1h")
+    p_fp_stock.add_argument("--period", type=str, default="1y", help="period when start/end not provided")
+    p_fp_stock.add_argument("--start", type=str, default=None, help="start date YYYY-MM-DD")
+    p_fp_stock.add_argument("--end", type=str, default=None, help="end date YYYY-MM-DD")
+    p_fp_stock.add_argument("--sma", type=str, default=(12, 26), help="SMA periods (e.g. 12,26)")
+    p_fp_stock.add_argument("--ema", type=str, default=(12, 26), help="EMA periods (e.g. 12,26)")
+    add_common_out_args(p_fp_stock)
+    p_fp_stock.set_defaults(func=cmd_fetch_plot_stock)
 
     return parser
 
@@ -109,4 +278,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

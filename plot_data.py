@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.ticker import FuncFormatter, MaxNLocator
 import numpy as np
 from matplotlib.widgets import CheckButtons
 
@@ -13,12 +14,15 @@ def load_csv(path):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     if "open_time" in df.columns:
-        df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
+        df["open_time"] = pd.to_datetime(df["open_time"])
         df = df.set_index("open_time")
+    elif "time" in df.columns:
+        df["time"] = pd.to_datetime(df["time"], errors="coerce")
+        df = df.set_index("time")
     return df
 
 
-def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50)):
+def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_crypto=False):
     opens = df["open"].tolist()
     highs = df["high"].tolist()
     lows = df["low"].tolist()
@@ -29,10 +33,20 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50)):
     macd_line, signal_line, hist = macd(closes)
     rsi_series = rsi(closes)
 
-    x_dt = df.index
-    x = mdates.date2num(x_dt.to_pydatetime())
+    if is_crypto:
+        x_dt = df.index
+        x = mdates.date2num(x_dt.to_pydatetime())
+    else:
+        x = np.arange(len(df))
+        idx_dt = df.index.to_pydatetime()
 
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
+    fig, (ax1, ax2, ax3) = plt.subplots(
+        3,
+        1,
+        figsize=(12, 9),
+        sharex=True,
+        gridspec_kw={"height_ratios": [4, 1, 1]},
+    )
     fig.subplots_adjust(right=0.82)
 
     if len(x) > 1:
@@ -87,13 +101,24 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50)):
     ax3.set_title("RSI")
     ax3.legend(loc="upper left")
 
-    locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
-    formatter = mdates.ConciseDateFormatter(locator)
+    if is_crypto:
+        locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
+        formatter = mdates.ConciseDateFormatter(locator)
+        for ax in [ax1, ax2, ax3]:
+            ax.grid(True, linestyle=":", linewidth=0.5)
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(formatter)
+    else:
+        def fmt_x(val, pos=None):
+            if np.isnan(val):
+                return ""
+            i = int(np.clip(round(val), 0, len(df) - 1))
+            return mdates.num2date(mdates.date2num(idx_dt[i])).strftime("%Y-%m-%d")
 
-    for ax in [ax1, ax2, ax3]:
-        ax.grid(True, linestyle=":", linewidth=0.5)
-        ax.xaxis.set_major_locator(locator)
-        ax.xaxis.set_major_formatter(formatter)
+        for ax in [ax1, ax2, ax3]:
+            ax.grid(True, linestyle=":", linewidth=0.5)
+            ax.xaxis.set_major_locator(MaxNLocator(nbins=10, integer=True, prune="both"))
+            ax.xaxis.set_major_formatter(FuncFormatter(fmt_x))
 
     fig.autofmt_xdate()
 

@@ -1,16 +1,15 @@
 ## Требования
 - Python 3.8+
-- Установка
+### Установка
 ```bash
-python -m pip install pandas matplotlib requests
+python -m pip install pandas matplotlib requests yfinance
 ```
 
 ## Структура
-- `get_data.py` — загрузка данных через API Binance
+- `get_<instruments>.py` — загрузка данных через API Binance
 - `plot.py` — построение графиков на данных из CSV файлов
 - `metrics.py` — индикаторы: `sma`, `ema`, `macd`, `rsi`
 - `main.py` — CLI для управления
-
 
 ## Примеры
 Файл запускается из корня проекта
