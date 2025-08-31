@@ -4,6 +4,8 @@ import matplotlib.dates as mdates
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 import numpy as np
 from matplotlib.widgets import CheckButtons
+from matplotlib.transforms import blended_transform_factory
+from types import SimpleNamespace
 
 from metrics import sma, ema, macd, rsi
 
@@ -94,6 +96,66 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
         for patch, v in zip(vol_bars.patches, volumes):
             h = (0 if v is None or pd.isna(v) else v * scale)
             patch.set_height(h)
+        fig.canvas.draw_idle()
+
+
+    vp_container = SimpleNamespace(patches=[])
+    vp_target_frac = 0.15
+    vp_bins = 40
+    vp_color = "tab:blue"
+    vp_alpha = 0.22
+    vp_transform = blended_transform_factory(ax1.transAxes, ax1.transData)
+
+    def _update_volume_profile():
+        for p in vp_container.patches:
+            try:
+                p.remove()
+            except Exception:
+                pass
+        vp_container.patches.clear()
+
+        xlim = ax1.get_xlim()
+
+        vis_mask = [(xlim[0] <= xi <= xlim[1]) for xi in x]
+        if not any(vis_mask):
+            fig.canvas.draw_idle()
+            return
+
+        vis_prices = [c for c, m in zip(closes, vis_mask) if m and not pd.isna(c)]
+        vis_vols = [v for v, m in zip(volumes, vis_mask) if m and not pd.isna(v)]
+        if not vis_prices or not vis_vols:
+            fig.canvas.draw_idle()
+            return
+
+        pmin = float(np.min(vis_prices))
+        pmax = float(np.max(vis_prices))
+        if not np.isfinite(pmin) or not np.isfinite(pmax) or pmax <= pmin:
+            fig.canvas.draw_idle()
+            return
+
+        edges = np.linspace(pmin, pmax, vp_bins + 1)
+        hist, edges = np.histogram(vis_prices, bins=edges, weights=vis_vols)
+        max_bin = float(np.max(hist)) if np.any(hist) else 0.0
+        if max_bin <= 0:
+            fig.canvas.draw_idle()
+            return
+
+        for v, y0, y1 in zip(hist, edges[:-1], edges[1:]):
+            if v <= 0:
+                continue
+            width_ax = (v / max_bin) * vp_target_frac
+            rect = plt.Rectangle(
+                (1.0 - width_ax, y0),
+                width_ax,
+                (y1 - y0),
+                transform=vp_transform,
+                facecolor=vp_color,
+                edgecolor="none",
+                alpha=vp_alpha,
+                zorder=0,
+            )
+            ax1.add_patch(rect)
+            vp_container.patches.append(rect)
         fig.canvas.draw_idle()
 
     for xi, o, h, l, c in zip(x, opens, highs, lows, closes):
@@ -189,6 +251,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
             new_ylim = zoom_1d(event.ydata, ylim, scale)
             ax.set_ylim(new_ylim)
         _rescale_volume_bars()
+        _update_volume_profile()
         fig.canvas.draw_idle()
 
     def on_press(event):
@@ -213,6 +276,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
             ylim0 = state["ylim"]
             state["ax"].set_ylim(ylim0[0] - dy, ylim0[1] - dy)
         _rescale_volume_bars()
+        _update_volume_profile()
         fig.canvas.draw_idle()
 
     def on_release(event):
@@ -221,6 +285,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
         state["ylim"] = None
         state["ax"] = None
         _rescale_volume_bars()
+        _update_volume_profile()
 
     fig.canvas.mpl_connect("scroll_event", on_scroll)
     fig.canvas.mpl_connect("button_press_event", on_press)
@@ -258,6 +323,7 @@ def plot_indicators(df, symbol, sma_periods=(20, 50), ema_periods=(20, 50), is_c
 
     plt.tight_layout()
     _rescale_volume_bars()
+    _update_volume_profile()
     plt.show()
 
 
