@@ -11,6 +11,7 @@ def sma(values, period):
             result.append(None)
     return result
 
+
 def ema(values, period):
     result = []
     multiplier = 2.0 / (period + 1)
@@ -29,6 +30,7 @@ def ema(values, period):
         prev = current
         result.append(current)
     return result
+
 
 def macd(values, fast=12, slow=26, signal=9):
     ema_fast = ema(values, fast)
@@ -66,6 +68,7 @@ def macd(values, fast=12, slow=26, signal=9):
             histogram.append(m - s)
 
     return macd_line, signal_line, histogram
+
 
 def rsi(values, period=14):
     result = []

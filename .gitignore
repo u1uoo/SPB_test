@@ -2,3 +2,5 @@
 *.png
 !crypto.csv
 !stocks.csv
+__pycache__/
+*.pyc

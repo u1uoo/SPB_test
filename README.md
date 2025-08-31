@@ -3,7 +3,7 @@
 
 ### Установка
 ```bash
-python -m pip install requests numpy pandas  matplotlib yfinance 
+python -m pip install requests numpy pandas matplotlib yfinance 
 ```
 
 ## Структура
