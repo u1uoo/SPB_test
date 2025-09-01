@@ -1,3 +1,13 @@
+"""Matplotlib-based plotting for OHLC data and indicators.
+
+Features:
+- Candlestick rendering with SMA/EMA overlays
+- MACD and RSI subplots
+- Volume bars scaled to visible window
+- Volume Profile (by price) at the right side with Value Area lines
+- Interactive zoom/pan (mouse wheel, Shift for Y), and toggle visibility
+"""
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -12,6 +22,10 @@ from metrics import sma, ema, macd, rsi, volume_profile, value_area_bounds
 
 
 def load_csv(path):
+    """Load CSV with either crypto (`open_time`) or stock (`time`) index.
+
+    Coerces OHLCV numeric columns and sets datetime index accordingly.
+    """
     df = pd.read_csv(path)
     for col in ["open", "high", "low", "close", "volume"]:
         if col in df.columns:
@@ -26,6 +40,11 @@ def load_csv(path):
 
 
 def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_crypto=False):
+    """Render price/indicators using Matplotlib.
+
+    If `is_crypto` True, use a time-based X axis; otherwise, integer index with
+    date formatting for readability (for data without continuous dates).
+    """
     opens = df["open"].tolist()
     highs = df["high"].tolist()
     lows = df["low"].tolist()
@@ -81,6 +100,7 @@ def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_c
     target_vol_frac = 0.15
 
     def _visible_max_volume():
+        """Compute max volume within current X-axis limits for scaling bars."""
         xlim = ax1.get_xlim()
         vis_max = 0.0
         for xi, v in zip(x, volumes):
@@ -92,6 +112,7 @@ def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_c
         return vis_max if vis_max > 0 else 1.0
 
     def _rescale_volume_bars():
+        """Rescale volume bars so that their max height is a fraction of Y span."""
         vis_max = _visible_max_volume()
         scale = target_vol_frac / vis_max
         for patch, v in zip(vol_bars.patches, volumes):
@@ -108,6 +129,7 @@ def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_c
     vp_transform = blended_transform_factory(ax1.transAxes, ax1.transData)
 
     def _update_volume_profile():
+        """Recompute and redraw the Volume Profile for the visible X window."""
         for p in vp_container.patches:
             try:
                 p.remove()
@@ -251,6 +273,7 @@ def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_c
         return left, right
 
     def on_scroll(event):
+        """Mouse wheel zoom: X by default, Y when holding Shift."""
         ax = event.inaxes
         if ax is None:
             return
@@ -270,6 +293,7 @@ def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_c
         fig.canvas.draw_idle()
 
     def on_press(event):
+        """Start panning on left-click; hold Shift to pan in Y for active subplot."""
         if event.button != 1 or event.inaxes is None:
             return
         state["press"] = (event.xdata, event.ydata)
@@ -278,6 +302,7 @@ def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_c
         state["ax"] = event.inaxes
 
     def on_motion(event):
+        """While dragging, pan X; with Shift pressed, also pan Y on active axis."""
         if state["press"] is None or event.inaxes is None or event.xdata is None:
             return
         x0, y0 = state["press"]
@@ -295,6 +320,7 @@ def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_c
         fig.canvas.draw_idle()
 
     def on_release(event):
+        """Finish panning and refresh aux layers (volume/profile)."""
         state["press"] = None
         state["xlim"] = None
         state["ylim"] = None
@@ -343,6 +369,7 @@ def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_c
 
 
 def main():
+    """Entry point for the CLI when used as a module or script."""
     path = "ohlc_BTCUSDT.csv"
     df = load_csv(path)
     if df.empty:

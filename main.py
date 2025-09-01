@@ -1,3 +1,12 @@
+"""CLI for fetching OHLC data (crypto/stocks) and plotting indicators.
+
+Subcommands:
+- fetch-crypto / fetch-cryptos
+- fetch-stock / fetch-stocks
+- plot
+- fetch-plot-crypto / fetch-plot-stock
+"""
+
 import argparse
 import os
 import sys
@@ -10,10 +19,15 @@ from plotly_plot import plot_indicators_plotly
 
 
 def eprint(msg):
+    """Print to stderr (for errors and warnings)."""
     print(msg, file=sys.stderr)
 
 
 def _parse_periods(opt, default=(12, 26)):
+    """Parse comma-separated periods string into a tuple of ints.
+
+    Accepts tuples/lists directly; validates positivity.
+    """
     if not opt:
         return default
     try:
@@ -27,18 +41,21 @@ def _parse_periods(opt, default=(12, 26)):
 
 
 def _ensure_dir(path):
+    """Ensure parent directory for `path` exists."""
     d = os.path.dirname(path)
     if d and not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
 
 def _save_df(df, out):
+    """Save DataFrame to CSV path, creating directories if needed."""
     _ensure_dir(out)
     df.to_csv(out, index=False)
     print(f"saved to {out}")
 
 
 def _fetch_and_save(fetch_fn, symbol, outdir, **kwargs):
+    """Generic fetch+save helper used by single-symbol commands."""
     try:
         df = fetch_fn(symbol, **kwargs)
     except Exception as exc:
@@ -52,6 +69,10 @@ def _fetch_and_save(fetch_fn, symbol, outdir, **kwargs):
 
 
 def _batch_fetch(list_path, fetch_fn, outdir, per_symbol_kwargs):
+    """Batch read symbols from CSV and fetch+save each one.
+
+    The `list_path` CSV must contain a `symbol` column.
+    """
     import pandas as pd
 
     if not os.path.exists(list_path):
@@ -129,6 +150,7 @@ def cmd_fetch_stocks_batch(args):
 
 
 def cmd_plot(args):
+    """Load CSV and render indicators with selected backend (mpl/plotly)."""
     if args.path:
         path = args.path
     elif args.symbol:
@@ -149,6 +171,7 @@ def cmd_plot(args):
     symbol = args.symbol or (df["symbol"].iloc[0] if "symbol" in df.columns else "SYMBOL")
 
     def _norm_periods(val, default=(12, 26)):
+        """Normalize CLI option into a tuple of ints."""
         if val is None:
             return default
         if isinstance(val, (tuple, list)):
@@ -178,6 +201,7 @@ def cmd_plot(args):
 
 
 def cmd_fetch_plot_crypto(args):
+    """Fetch crypto OHLC and immediately plot indicators."""
     if cmd_fetch_crypto(args) != 0:
         return 1
     p = SimpleNamespace(
@@ -193,6 +217,7 @@ def cmd_fetch_plot_crypto(args):
 
 
 def cmd_fetch_plot_stock(args):
+    """Fetch stock OHLC and immediately plot indicators."""
     if cmd_fetch_stock(args) != 0:
         return 1
     p = SimpleNamespace(
@@ -208,10 +233,12 @@ def cmd_fetch_plot_stock(args):
 
 
 def build_parser():
+    """CLI argument parser."""
     parser = argparse.ArgumentParser(description="Fetch OHLC data and plot indicators.")
     sub = parser.add_subparsers(dest="command")
 
     def add_common_out_args(p):
+        """Add common output arguments to a subparser."""
         p.add_argument("--outdir", type=str, default=".", help="directory for outputs")
 
 
@@ -285,6 +312,7 @@ def build_parser():
 
 
 def main(argv=None):
+    """Entry point for the CLI when used as a module or script."""
     parser = build_parser()
     args = parser.parse_args(argv)
     if not hasattr(args, "func"):
