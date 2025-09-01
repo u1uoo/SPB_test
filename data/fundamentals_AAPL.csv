@@ -1,2 +1,2 @@
-symbol,price,eps_ttm,book_value_ps,pe_ttm,pe_forward,pb,peg,ev_to_ebitda,ev_to_revenue,roe,roa,profit_margin,operating_margin,current_ratio,quick_ratio,debt_to_equity,dividend_yield,payout_ratio,beta,market_cap,shares_outstanding
-AAPL,232.14,6.59,4.431,35.2261,27.935017,52.389977,,24.64,8.544,1.49814,0.24545999,0.24295999,0.29990998,0.868,0.724,154.486,0.45,0.1533,1.165,3445050310656.0,14840399872.0
+symbol,price,eps_ttm,book_value_ps,pe_ttm,pb,roe,profit_margin,debt_to_equity,dividend_yield,market_cap
+AAPL,232.14,6.59,4.431,35.2261,52.389977,1.49814,0.24295999,154.486,0.45,3445050310656
