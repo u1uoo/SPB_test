@@ -13,7 +13,7 @@ import sys
 from types import SimpleNamespace
 
 from spb_test.data_fetch.get_crypto import get_crypto_data
-from spb_test.data_fetch.get_stocks import get_stocks_data
+from spb_test.data_fetch.get_stocks import get_stocks_data, get_financial_ratios
 from spb_test.plotting.plot_data import load_csv as load_csv_plot, plot_indicators
 from spb_test.plotting.plotly_plot import plot_indicators_plotly
 
@@ -232,6 +232,52 @@ def cmd_fetch_plot_stock(args):
     return cmd_plot(p)
 
 
+def cmd_fundamentals(args):
+    """Fetch financial ratios and save to CSV.
+
+    Single symbol → fundamentals_{SYMBOL}.csv
+    List of symbols → fundamentals.csv
+    """
+    import pandas as pd
+
+    symbols = []
+    if getattr(args, "symbol", None):
+        symbols = [args.symbol]
+    elif getattr(args, "list", None):
+        if not os.path.exists(args.list):
+            eprint("file not found")
+            return 1
+        instruments = pd.read_csv(args.list, comment="#")
+        if "symbol" not in instruments.columns:
+            eprint("missing 'symbol' column")
+            return 1
+        symbols = [str(s) for s in instruments["symbol"]]
+    else:
+        eprint("either --symbol or --list is required for 'fundamentals'")
+        return 2
+
+    rows = []
+    for sym in symbols:
+        try:
+            ratios = get_financial_ratios(sym)
+        except Exception as exc:
+            eprint(f"{sym}: error: {exc}")
+            continue
+        rows.append(ratios)
+
+    if not rows:
+        eprint("no data")
+        return 1
+
+    import pandas as pd
+    df = pd.DataFrame(rows)
+    fname = f"fundamentals_{symbols[0]}.csv" if len(symbols) == 1 else "fundamentals.csv"
+    out = os.path.join(args.outdir, fname)
+    _ensure_dir(out)
+    df.to_csv(out, index=False)
+    print(f"saved to {out}")
+    return 0
+
 def build_parser():
     """CLI argument parser."""
     parser = argparse.ArgumentParser(description="Fetch OHLC data and plot indicators.")
@@ -307,6 +353,12 @@ def build_parser():
     p_fp_stock.add_argument("--backend", type=str, choices=["mpl", "plotly"], default="mpl", help="Plotting backend")
     add_common_out_args(p_fp_stock)
     p_fp_stock.set_defaults(func=cmd_fetch_plot_stock)
+
+    p_fund = sub.add_parser("fundamentals", help="Fetch financial ratios and save CSV")
+    p_fund.add_argument("--symbol", type=str, default=None, help="stock ticker, e.g. AAPL")
+    p_fund.add_argument("--list", type=str, default=None, help="csv with column 'symbol'")
+    add_common_out_args(p_fund)
+    p_fund.set_defaults(func=cmd_fundamentals)
 
     return parser
 
