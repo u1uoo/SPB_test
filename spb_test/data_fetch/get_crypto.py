@@ -73,7 +73,7 @@ def get_crypto_data(symbol, interval="1d", limit=1500, start_time=None, end_time
 
 def main():
     """Entry point for the CLI when used as a module or script."""
-    instruments = pd.read_csv("crypto.csv", comment="#")
+    instruments = pd.read_csv("data/crypto.csv", comment="#")
 
     for symbol in instruments["symbol"]:
         try:
@@ -82,8 +82,8 @@ def main():
             print(e)
 
         if not df.empty:
-            # Save per-symbol OHLCV to CSV in the current directory
-            df.to_csv(f"ohlc_{symbol}.csv", index=False)
+            # Save per-symbol OHLCV to CSV in the data directory
+            df.to_csv(f"data/ohlc_{symbol}.csv", index=False)
 
 
 if __name__ == "__main__":

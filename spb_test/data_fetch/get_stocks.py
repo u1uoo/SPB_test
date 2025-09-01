@@ -64,14 +64,14 @@ def get_stocks_data(symbol, interval="1d", period="1y", start=None, end=None):
 
 def main():
     """Entry point for the CLI when used as a module or script."""
-    instruments = pd.read_csv("stocks.csv", comment="#")
+    instruments = pd.read_csv("data/stocks.csv", comment="#")
 
     for symbol in instruments["symbol"]:
         df = get_stocks_data(symbol)
         if not df.empty:
-            # Save per-symbol OHLCV to CSV in the current directory
-            df.to_csv(f"ohlc_{symbol}.csv", index=False)
-            print(f"saved to ohlc_{symbol}.csv")
+            # Save per-symbol OHLCV to CSV in the data directory
+            df.to_csv(f"data/ohlc_{symbol}.csv", index=False)
+            print(f"saved to data/ohlc_{symbol}.csv")
         else:
             print(f"empty data")
 

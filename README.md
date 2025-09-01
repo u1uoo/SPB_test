@@ -7,11 +7,14 @@ python -m pip install requests numpy pandas matplotlib yfinance plotly numba
 ```
 
 ## Структура
-- `get_crypto.py` — загрузка OHLC криптовалют c Binance
-- `get_stocks.py` — загрузка OHLC акций через yfinance
-- `plot_data.py` — отрисовка графиков и индикаторов из CSV
-- `metrics.py` — индикаторы: `sma`, `ema`, `macd`, `rsi`, `volume_profile`
+- `spb_test/data_fetch/get_crypto.py` — загрузка OHLC криптовалют c Binance
+- `spb_test/data_fetch/get_stocks.py` — загрузка OHLC акций через yfinance
+- `spb_test/plotting/plot_data.py` — отрисовка графиков и индикаторов из CSV (Matplotlib)
+- `spb_test/plotting/plotly_plot.py` — интерактивные графики (Plotly)
+- `spb_test/indicators/metrics.py` — индикаторы: `sma`, `ema`, `macd`, `rsi`, `volume_profile`
 - `main.py` — CLI для управления
+- `data/` — входные/выходные CSV (`crypto.csv`, `stocks.csv`, `ohlc_*.csv`)
+- `notebooks/` — ноутбуки с примерами анализа
 
 ## Использование
 Запускать из корня проекта.
@@ -21,9 +24,9 @@ python -m pip install requests numpy pandas matplotlib yfinance plotly numba
 ```bash
 python main.py fetch-crypto --symbol BTCUSDT --interval 1d --outdir data
 ```
-- Загрузка нескольких тикеров из `crypto.csv`:
+- Загрузка нескольких тикеров из `data/crypto.csv`:
 ```bash
-python main.py fetch-cryptos --list crypto.csv --interval 1d --outdir data
+python main.py fetch-cryptos --list data/crypto.csv --interval 1d --outdir data
 ```
 - Загрузка и построение графика одновременно:
 ```bash
@@ -31,32 +34,32 @@ python main.py fetch-plot-crypto --symbol BTCUSDT --interval 1d --sma 12,26 --em
 ```
 
 ### Акции
-- Загрузка акицй одной компании:
+- Загрузка акций одной компании:
 ```bash
 python main.py fetch-stock --symbol AAPL --interval 1d --period 1y --outdir data
 ```
 
-- Загрузка нескольких тикеров из `stocks.csv`:
+- Загрузка нескольких тикеров из `data/stocks.csv`:
 ```bash
-python main.py fetch-stocks --list stocks.csv --interval 1d --period 1y --outdir data
+python main.py fetch-stocks --list data/stocks.csv --interval 1d --period 1y --outdir data
 ```
 - Загрузка и построение графика одновременно:
 ```bash
-python main.py fetch-plot-stock --symbol AAPL --interval 1d --period 1y --sma 12,26 --ema 21,55 --outdir .
+python main.py fetch-plot-stock --symbol AAPL --interval 1d --period 1y --sma 12,26 --ema 21,55 --outdir data
 ```
 
 ### Построение графиков из CSV
 ```bash
 # Matplotlib backend
-python main.py plot --path ./ohlc_BTCUSDT.csv --sma 12,26 --ema 21,55 --backend mpl
+python main.py plot --path ./data/ohlc_BTCUSDT.csv --sma 12,26 --ema 21,55 --backend mpl
 
 # Plotly backend (WebGL)
-python main.py plot --path ./ohlc_BTCUSDT.csv --sma 12,26 --ema 21,55 --backend plotly
+python main.py plot --path ./data/ohlc_BTCUSDT.csv --sma 12,26 --ema 21,55 --backend plotly
 ```
 
 Примечания:
 - `--sma` и `--ema` — список периодов через запятую, например `12,26`.
-- Все данные сохраняются как `ohlc_{SYMBOL}.csv` в указанной директории`--outdir`.
+- Все данные сохраняются как `ohlc_{SYMBOL}.csv` в указанной директории `--outdir` (по умолчанию `data/`).
 - `--backend` — `mpl` (Matplotlib, по умолчанию) или `plotly` (WebGL, быстрее для больших данных).
 - Для акций `--start`/`--end` (YYYY-MM-DD) имеют приоритет над `--period`.
 
@@ -77,7 +80,7 @@ python main.py plot --path ./ohlc_BTCUSDT.csv --sma 12,26 --ema 21,55 --backend 
   - `--outdir` (.)
 
 - fetch-cryptos:
-  - `--list` (crypto.csv)
+  - `--list` (data/crypto.csv)
   - `--interval` (1d)
   - `--outdir` (.)
 
@@ -90,7 +93,7 @@ python main.py plot --path ./ohlc_BTCUSDT.csv --sma 12,26 --ema 21,55 --backend 
   - `--outdir` (.)
 
 - fetch-stocks:
-  - `--list` (stocks.csv)
+  - `--list` (data/stocks.csv)
   - `--interval` (1d)
   - `--period` (1y)
   - `--start` (YYYY-MM-DD, опционально)

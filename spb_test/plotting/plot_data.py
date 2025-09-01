@@ -18,7 +18,7 @@ from matplotlib.transforms import blended_transform_factory
 from matplotlib.lines import Line2D
 from types import SimpleNamespace
 
-from metrics import sma, ema, macd, rsi, volume_profile, value_area_bounds
+from spb_test.indicators.metrics import sma, ema, macd, rsi, volume_profile, value_area_bounds
 
 
 def load_csv(path):
@@ -370,7 +370,7 @@ def plot_indicators(df, symbol, sma_periods=(12, 26), ema_periods=(12, 26), is_c
 
 def main():
     """Entry point for the CLI when used as a module or script."""
-    path = "ohlc_BTCUSDT.csv"
+    path = "data/ohlc_BTCUSDT.csv"
     df = load_csv(path)
     if df.empty:
         print("no data")

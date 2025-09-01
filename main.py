@@ -12,10 +12,10 @@ import os
 import sys
 from types import SimpleNamespace
 
-from get_crypto import get_crypto_data
-from get_stocks import get_stocks_data
-from plot_data import load_csv as load_csv_plot, plot_indicators
-from plotly_plot import plot_indicators_plotly
+from spb_test.data_fetch.get_crypto import get_crypto_data
+from spb_test.data_fetch.get_stocks import get_stocks_data
+from spb_test.plotting.plot_data import load_csv as load_csv_plot, plot_indicators
+from spb_test.plotting.plotly_plot import plot_indicators_plotly
 
 
 def eprint(msg):

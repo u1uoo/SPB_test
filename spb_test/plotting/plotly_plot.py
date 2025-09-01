@@ -8,7 +8,7 @@ import numpy as np
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
-from metrics import sma, ema, macd, rsi
+from spb_test.indicators.metrics import sma, ema, macd, rsi
 
 
 def plot_indicators_plotly(df: pd.DataFrame, symbol: str, sma_periods=(20, 50), ema_periods=(20, 50), is_crypto: bool = False) -> None:
