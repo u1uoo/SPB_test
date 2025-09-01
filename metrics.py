@@ -205,6 +205,98 @@ def rsi(values, period=14):
     return [None if (x != x) else float(x) for x in out]
 
 
+@njit(cache=True, fastmath=True)
+def _volume_profile_kernel(prices: np.ndarray, volumes: np.ndarray, bins: int):
+    """Numba kernel to compute histogram of volume by price bins.
+
+    Returns (hist, edges, max_bin). Assumes `prices`/`volumes` are finite and
+    have the same length. When inputs are not suitable, returns empty arrays and 0.0.
+    """
+    n = prices.shape[0]
+    if n == 0 or bins <= 0:
+        return np.empty(0, dtype=np.float64), np.empty(0, dtype=np.float64), 0.0
+
+    pmin = prices[0]
+    pmax = prices[0]
+    for i in range(1, n):
+        v = prices[i]
+        if v < pmin:
+            pmin = v
+        if v > pmax:
+            pmax = v
+
+    if not (pmax > pmin):
+        return np.empty(0, dtype=np.float64), np.empty(0, dtype=np.float64), 0.0
+
+    edges = np.linspace(pmin, pmax, bins + 1)
+    hist = np.zeros(bins, dtype=np.float64)
+    width = (pmax - pmin) / bins
+
+    for i in range(n):
+        price = prices[i]
+        vol = volumes[i]
+        if price >= pmax:
+            idx = bins - 1
+        else:
+            idx = int((price - pmin) / width)
+            if idx < 0:
+                idx = 0
+            elif idx >= bins:
+                idx = bins - 1
+        hist[idx] += vol
+
+    max_bin = 0.0
+    for i in range(bins):
+        if hist[i] > max_bin:
+            max_bin = hist[i]
+    return hist, edges, max_bin
+
+
+@njit(cache=True, fastmath=True)
+def _value_area_bounds_kernel(hist: np.ndarray, edges: np.ndarray, coverage: float):
+    """Numba kernel for Value Area Low/High using POC expansion.
+
+    Returns (VAL, VAH) as floats; returns (nan, nan) when not computable.
+    """
+    n = hist.shape[0]
+    if n == 0 or edges.shape[0] != n + 1:
+        return np.nan, np.nan
+    total = 0.0
+    for i in range(n):
+        total += hist[i]
+    if total <= 0.0:
+        return np.nan, np.nan
+
+    poc = 0
+    maxv = hist[0]
+    for i in range(1, n):
+        if hist[i] > maxv:
+            maxv = hist[i]
+            poc = i
+
+    low = poc
+    high = poc
+    covered = hist[poc]
+    left = poc - 1
+    right = poc + 1
+
+    while (covered / total) < coverage:
+        left_val = hist[left] if left >= 0 else -1.0
+        right_val = hist[right] if right < n else -1.0
+        if left_val < 0.0 and right_val < 0.0:
+            break
+        if right_val > left_val:
+            covered += right_val
+            high = right
+            right += 1
+        else:
+            covered += left_val
+            low = left
+            left -= 1
+
+    return float(edges[low]), float(edges[high + 1])
+
+
 def volume_profile(prices, volumes, bins=40):
     """Histogram of volume by price bins.
 
@@ -217,14 +309,8 @@ def volume_profile(prices, volumes, bins=40):
         return np.array([], dtype=np.float64), np.array([], dtype=np.float64), 0.0
     p = prices_arr[mask]
     v = vols_arr[mask]
-    pmin = float(np.min(p))
-    pmax = float(np.max(p))
-    if not np.isfinite(pmin) or not np.isfinite(pmax) or pmax <= pmin:
-        return np.array([], dtype=np.float64), np.array([], dtype=np.float64), 0.0
-    edges = np.linspace(pmin, pmax, int(bins) + 1)
-    hist, edges = np.histogram(p, bins=edges, weights=v)
-    max_bin = float(np.max(hist)) if np.any(hist) else 0.0
-    return hist.astype(np.float64), edges.astype(np.float64), max_bin
+    hist, edges, max_bin = _volume_profile_kernel(p, v, int(bins))
+    return hist.astype(np.float64), edges.astype(np.float64), float(max_bin)
 
 
 def value_area_bounds(hist, edges, coverage=0.7):
@@ -240,27 +326,9 @@ def value_area_bounds(hist, edges, coverage=0.7):
     """
     if hist is None or edges is None or len(hist) == 0 or len(edges) != len(hist) + 1:
         return None
-    total = float(np.sum(hist))
-    if total <= 0:
+    hist_arr = np.asarray(hist, dtype=np.float64)
+    edges_arr = np.asarray(edges, dtype=np.float64)
+    val, vah = _value_area_bounds_kernel(hist_arr, edges_arr, float(coverage))
+    if not (np.isfinite(val) and np.isfinite(vah)):
         return None
-    poc = int(np.argmax(hist))
-    low = poc
-    high = poc
-    covered = float(hist[poc])
-    left = poc - 1
-    right = poc + 1
-    target = float(coverage)
-    while covered / total < target:
-        left_val = float(hist[left]) if left >= 0 else -1.0
-        right_val = float(hist[right]) if right < hist.shape[0] else -1.0
-        if left_val < 0 and right_val < 0:
-            break
-        if right_val > left_val:
-            covered += right_val
-            high = right
-            right += 1
-        else:
-            covered += left_val
-            low = left
-            left -= 1
-    return float(edges[low]), float(edges[high + 1])
+    return float(val), float(vah)
