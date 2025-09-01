@@ -107,6 +107,10 @@ def _macd_kernel(values: np.ndarray, fast: int, slow: int, signal: int):
     macd_arr = np.empty(n, dtype=np.float64)
     signal_arr = np.empty(n, dtype=np.float64)
     hist_arr = np.empty(n, dtype=np.float64)
+    # Initialize to NaN to avoid using uninitialized memory before values are set
+    for i in range(n):
+        signal_arr[i] = np.nan
+        hist_arr[i] = np.nan
     if n == 0:
         macd_arr[:] = np.nan
         signal_arr[:] = np.nan
