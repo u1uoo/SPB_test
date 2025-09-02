@@ -4,6 +4,7 @@
 * Все пункты первого задания
 * Парсинг OHLCV по акциям, парсинг фундаментальных метрик компании
 * Решения задач по мат. анализу в рукописном виде в изображении `math.jpg`
+* Склейка базы данных из отдельных таблиц  
 
 ## Где искать решения задач тестового задания:
 
@@ -39,7 +40,10 @@ python main.py fetch-plot-stock --symbol AAPL #mpl
 python main.py fetch-plot-stock --symbol AAPL --backend plotly #plotly
 ```
 
-
+3. ### База данных  
+``` bash
+python create_db.py
+```
 ## Требования
 - Python 3.8+
 
