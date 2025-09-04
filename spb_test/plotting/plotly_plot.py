@@ -1,12 +1,22 @@
+"""Plotly-based interactive plotting of OHLC data and indicators.
+
+Provides a function `plot_indicators_plotly` that mirrors the Matplotlib version
+"""
+
 import pandas as pd
 import numpy as np
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
-from metrics import sma, ema, macd, rsi
+from spb_test.indicators.metrics import sma, ema, macd, rsi
 
 
 def plot_indicators_plotly(df: pd.DataFrame, symbol: str, sma_periods=(20, 50), ema_periods=(20, 50), is_crypto: bool = False) -> None:
+	"""Render OHLC with SMA/EMA, MACD, RSI using Plotly.
+
+	Accepts a DataFrame with either a DatetimeIndex already set, or columns
+	`open_time` / `time` which are converted to the index.
+	"""
 	if not isinstance(df.index, (pd.DatetimeIndex, pd.core.indexes.datetimes.DatetimeIndex)):
 		if "open_time" in df.columns:
 			df = df.copy()
@@ -70,6 +80,8 @@ def plot_indicators_plotly(df: pd.DataFrame, symbol: str, sma_periods=(20, 50), 
 	fig.update_yaxes(range=[0, 100], row=3, col=1)
 
 	def _compute_profile_shapes(x0=None, x1=None, bins=40, target_frac=0.15):
+		"""Compute rectangles/lines representing Volume Profile + Value Area.
+		"""
 		if x0 is not None and x1 is not None:
 			mask = (x >= pd.to_datetime(x0)) & (x <= pd.to_datetime(x1))
 			prices = np.array(df.loc[mask, "close"], dtype=float)
@@ -92,6 +104,7 @@ def plot_indicators_plotly(df: pd.DataFrame, symbol: str, sma_periods=(20, 50), 
 
 		# compute Value Area (70%) boundaries using POC expansion
 		def _compute_value_area_bounds(hist_arr, edges_arr, coverage=0.7):
+			"""POC expansion algorithm to get VAL/VAH for a given coverage."""
 			total = float(np.sum(hist_arr))
 			if total <= 0:
 				return None

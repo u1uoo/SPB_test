@@ -1,19 +1,33 @@
+"""CLI for fetching OHLC data (crypto/stocks) and plotting indicators.
+
+Subcommands:
+- fetch-crypto / fetch-cryptos
+- fetch-stock / fetch-stocks
+- plot
+- fetch-plot-crypto / fetch-plot-stock
+"""
+
 import argparse
 import os
 import sys
 from types import SimpleNamespace
 
-from get_crypto import get_crypto_data
-from get_stocks import get_stocks_data
-from plot_data import load_csv as load_csv_plot, plot_indicators
-from plotly_plot import plot_indicators_plotly
+from spb_test.data_fetch.get_crypto import get_crypto_data
+from spb_test.data_fetch.get_stocks import get_stocks_data, get_financial_ratios
+from spb_test.plotting.plot_data import load_csv as load_csv_plot, plot_indicators
+from spb_test.plotting.plotly_plot import plot_indicators_plotly
 
 
 def eprint(msg):
+    """Print to stderr (for errors and warnings)."""
     print(msg, file=sys.stderr)
 
 
 def _parse_periods(opt, default=(12, 26)):
+    """Parse comma-separated periods string into a tuple of ints.
+
+    Accepts tuples/lists directly; validates positivity.
+    """
     if not opt:
         return default
     try:
@@ -27,18 +41,21 @@ def _parse_periods(opt, default=(12, 26)):
 
 
 def _ensure_dir(path):
+    """Ensure parent directory for `path` exists."""
     d = os.path.dirname(path)
     if d and not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
 
 def _save_df(df, out):
+    """Save DataFrame to CSV path, creating directories if needed."""
     _ensure_dir(out)
     df.to_csv(out, index=False)
     print(f"saved to {out}")
 
 
 def _fetch_and_save(fetch_fn, symbol, outdir, **kwargs):
+    """Generic fetch+save helper used by single-symbol commands."""
     try:
         df = fetch_fn(symbol, **kwargs)
     except Exception as exc:
@@ -52,6 +69,10 @@ def _fetch_and_save(fetch_fn, symbol, outdir, **kwargs):
 
 
 def _batch_fetch(list_path, fetch_fn, outdir, per_symbol_kwargs):
+    """Batch read symbols from CSV and fetch+save each one.
+
+    The `list_path` CSV must contain a `symbol` column.
+    """
     import pandas as pd
 
     if not os.path.exists(list_path):
@@ -129,6 +150,7 @@ def cmd_fetch_stocks_batch(args):
 
 
 def cmd_plot(args):
+    """Load CSV and render indicators with selected backend (mpl/plotly)."""
     if args.path:
         path = args.path
     elif args.symbol:
@@ -149,6 +171,7 @@ def cmd_plot(args):
     symbol = args.symbol or (df["symbol"].iloc[0] if "symbol" in df.columns else "SYMBOL")
 
     def _norm_periods(val, default=(12, 26)):
+        """Normalize CLI option into a tuple of ints."""
         if val is None:
             return default
         if isinstance(val, (tuple, list)):
@@ -178,6 +201,7 @@ def cmd_plot(args):
 
 
 def cmd_fetch_plot_crypto(args):
+    """Fetch crypto OHLC and immediately plot indicators."""
     if cmd_fetch_crypto(args) != 0:
         return 1
     p = SimpleNamespace(
@@ -193,6 +217,7 @@ def cmd_fetch_plot_crypto(args):
 
 
 def cmd_fetch_plot_stock(args):
+    """Fetch stock OHLC and immediately plot indicators."""
     if cmd_fetch_stock(args) != 0:
         return 1
     p = SimpleNamespace(
@@ -207,11 +232,59 @@ def cmd_fetch_plot_stock(args):
     return cmd_plot(p)
 
 
+def cmd_fundamentals(args):
+    """Fetch financial ratios and save to CSV.
+
+    Single symbol → fundamentals_{SYMBOL}.csv
+    List of symbols → fundamentals.csv
+    """
+    import pandas as pd
+
+    symbols = []
+    if getattr(args, "symbol", None):
+        symbols = [args.symbol]
+    elif getattr(args, "list", None):
+        if not os.path.exists(args.list):
+            eprint("file not found")
+            return 1
+        instruments = pd.read_csv(args.list, comment="#")
+        if "symbol" not in instruments.columns:
+            eprint("missing 'symbol' column")
+            return 1
+        symbols = [str(s) for s in instruments["symbol"]]
+    else:
+        eprint("either --symbol or --list is required for 'fundamentals'")
+        return 2
+
+    rows = []
+    for sym in symbols:
+        try:
+            ratios = get_financial_ratios(sym)
+        except Exception as exc:
+            eprint(f"{sym}: error: {exc}")
+            continue
+        rows.append(ratios)
+
+    if not rows:
+        eprint("no data")
+        return 1
+
+    import pandas as pd
+    df = pd.DataFrame(rows)
+    fname = f"fundamentals_{symbols[0]}.csv" if len(symbols) == 1 else "fundamentals.csv"
+    out = os.path.join(args.outdir, fname)
+    _ensure_dir(out)
+    df.to_csv(out, index=False)
+    print(f"saved to {out}")
+    return 0
+
 def build_parser():
+    """CLI argument parser."""
     parser = argparse.ArgumentParser(description="Fetch OHLC data and plot indicators.")
     sub = parser.add_subparsers(dest="command")
 
     def add_common_out_args(p):
+        """Add common output arguments to a subparser."""
         p.add_argument("--outdir", type=str, default=".", help="directory for outputs")
 
 
@@ -281,10 +354,17 @@ def build_parser():
     add_common_out_args(p_fp_stock)
     p_fp_stock.set_defaults(func=cmd_fetch_plot_stock)
 
+    p_fund = sub.add_parser("fundamentals", help="Fetch financial ratios and save CSV")
+    p_fund.add_argument("--symbol", type=str, default=None, help="stock ticker, e.g. AAPL")
+    p_fund.add_argument("--list", type=str, default=None, help="csv with column 'symbol'")
+    add_common_out_args(p_fund)
+    p_fund.set_defaults(func=cmd_fundamentals)
+
     return parser
 
 
 def main(argv=None):
+    """Entry point for the CLI when used as a module or script."""
     parser = build_parser()
     args = parser.parse_args(argv)
     if not hasattr(args, "func"):
