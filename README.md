@@ -34,7 +34,7 @@ python main.py fetch-plot-stock --symbol AAPL #mpl
 python main.py fetch-plot-stock --symbol AAPL --backend plotly #plotly
 ```
 
-3. ### База данных  
+3. ### База данных 
 ``` bash
 python create_db.py
 ```
@@ -43,8 +43,12 @@ python create_db.py
 4. ### Пример портфеля на основе фин. показателей компаний  
 Находится в `/portfolio/portfolio.pptx`
 
-5. ### Корреляции доходностей для различных значений lag
-Находится в `/notebooks/correlation_analysis.ipynb`
+5. ### Корреляции доходностей (ACF)
+- Ноутбук: `/notebooks/correlation_analysis.ipynb` — считает автокорреляции доходностей AAPL для lag=1..31 и строит график ACF.
+- CLI для автокорреляции при заданном лаге:
+```bash
+python main.py acf --file data/ohlc_AAPL.csv --lag 1
+```
 
 6. ### Решения задач
 Находятся в `/math/math.jpg`
@@ -184,3 +188,4 @@ python main.py plot --path ./data/ohlc_BTCUSDT.csv --sma 12,26 --ema 21,55 --bac
 ``` bash
 python create_db.py
 ```
+
