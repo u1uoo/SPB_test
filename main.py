@@ -5,6 +5,7 @@ Subcommands:
 - fetch-stock / fetch-stocks
 - plot
 - fetch-plot-crypto / fetch-plot-stock
+- acf
 """
 
 import argparse
@@ -16,6 +17,8 @@ from spb_test.data_fetch.get_crypto import get_crypto_data
 from spb_test.data_fetch.get_stocks import get_stocks_data, get_financial_ratios
 from spb_test.plotting.plot_data import load_csv as load_csv_plot, plot_indicators
 from spb_test.plotting.plotly_plot import plot_indicators_plotly
+import pandas as pd
+from spb_test.statistics.statistics import analyze_file_single_lag
 
 
 def eprint(msg):
@@ -278,6 +281,21 @@ def cmd_fundamentals(args):
     print(f"saved to {out}")
     return 0
 
+
+def cmd_acf(args):
+    path = args.file
+    if not os.path.exists(path):
+        eprint(f"file not found: {path}")
+        return 1
+    try:
+        label, value = analyze_file_single_lag(path, lag=args.lag)
+    except Exception as exc:
+        eprint(f"{path}: error: {exc}")
+        return 1
+
+    print(f"Correlation value of returns for {label} at lag {args.lag}: {value:.6f}")
+    return 0
+
 def build_parser():
     """CLI argument parser."""
     parser = argparse.ArgumentParser(description="Fetch OHLC data and plot indicators.")
@@ -285,7 +303,7 @@ def build_parser():
 
     def add_common_out_args(p):
         """Add common output arguments to a subparser."""
-        p.add_argument("--outdir", type=str, default=".", help="directory for outputs")
+        p.add_argument("--outdir", type=str, default="data", help="directory for outputs")
 
 
     p_fetch = sub.add_parser("fetch-crypto", help="fetch crypto OHLC from Binance")
@@ -359,6 +377,11 @@ def build_parser():
     p_fund.add_argument("--list", type=str, default=None, help="csv with column 'symbol'")
     add_common_out_args(p_fund)
     p_fund.set_defaults(func=cmd_fundamentals)
+
+    p_acf = sub.add_parser("acf", help="Compute autocorrelation of returns at given lag")
+    p_acf.add_argument("--file", type=str, required=True, help="CSV path")
+    p_acf.add_argument("--lag", type=int, default=1, help="Lag for autocorrelation")
+    p_acf.set_defaults(func=cmd_acf)
 
     return parser
 
